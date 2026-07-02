@@ -1,0 +1,13 @@
+{
+  "125": {
+    "delete_old": false, 
+    "image_param": "QR код_Зображення (тип)", 
+    "qr_size": "300", 
+    "suffix": "", 
+    "overwrite": true, 
+    "save_folder": "D:\\Geek\\01_Проекти\\14.04.26  Микола_ЖК_Родина\\Зображення", 
+    "prefix": "QR", 
+    "url_param": "URL (тип)", 
+    "name_param": "Описание (тип)"
+  }
+}
