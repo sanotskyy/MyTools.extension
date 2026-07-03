@@ -42,21 +42,21 @@ def _show_notice(local_ver, remote_ver):
     form.Controls.Add(lbl1)
 
     lbl2 = Label()
-    lbl2.Text      = u"Поточна версія:  {}".format(local_ver)
+    lbl2.Text      = u"Поточна версія:  " + local_ver
     lbl2.Font      = Font(u"Segoe UI", 9)
     lbl2.ForeColor = Color.FromArgb(40, 40, 40)
     lbl2.SetBounds(16, 44, 340, 20)
     form.Controls.Add(lbl2)
 
     lbl3 = Label()
-    lbl3.Text      = u"Нова версія:     {}".format(remote_ver)
+    lbl3.Text      = u"Нова версія:     " + remote_ver
     lbl3.Font      = Font(u"Segoe UI", 9, FontStyle.Bold)
     lbl3.ForeColor = Color.FromArgb(0, 140, 0)
     lbl3.SetBounds(16, 64, 340, 20)
     form.Controls.Add(lbl3)
 
     lbl4 = Label()
-    lbl4.Text      = u"Натисніть кнопку "Оновлення" в панелі BIM Tools."
+    lbl4.Text      = u"Натисніть кнопку «Оновлення» в панелі BIM Tools."
     lbl4.Font      = Font(u"Segoe UI", 8)
     lbl4.ForeColor = Color.FromArgb(100, 100, 120)
     lbl4.SetBounds(16, 92, 340, 18)
