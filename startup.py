@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""startup.py - автоматична перевірка оновлень при запуску pyRevit."""
+"""startup.py - автоматична перевірка оновлень при запуску pyRevit (асинхронно)."""
 import os
 import sys
 
@@ -13,11 +13,13 @@ try:
     import clr
     clr.AddReference("System.Windows.Forms")
     clr.AddReference("System.Drawing")
+    clr.AddReference("System.Threading")
     from System.Windows.Forms import (
         Form, Label, Button, DialogResult,
         FormBorderStyle, FormStartPosition
     )
     from System.Drawing import Font, FontStyle, Color
+    from System.Threading import Thread, ThreadStart, ApartmentState
 except Exception:
     raise SystemExit
 
@@ -72,12 +74,33 @@ def _show_notice(local_ver, remote_ver):
     form.ShowDialog()
 
 
+def _check_thread():
+    """Виконується в окремому потоці - не блокує запуск Revit."""
+    try:
+        # Затримка 10 секунд - чекаємо поки Revit повністю завантажиться
+        import time
+        time.sleep(10)
+
+        result = check_for_updates()
+        if result and result.get(u'has_update'):
+            local_ver  = result.get(u'local',  u'?')
+            remote_ver = result.get(u'remote', u'?')
+
+            # Показуємо вікно через STA поток (Windows Forms вимагає STA)
+            def _show():
+                _show_notice(local_ver, remote_ver)
+
+            sta = Thread(ThreadStart(_show))
+            sta.SetApartmentState(ApartmentState.STA)
+            sta.Start()
+            sta.Join()
+    except Exception:
+        pass
+
+
 try:
-    result = check_for_updates()
-    if result and result.get(u'has_update'):
-        _show_notice(
-            result.get(u'local',  u'?'),
-            result.get(u'remote', u'?')
-        )
+    t = Thread(ThreadStart(_check_thread))
+    t.IsBackground = True
+    t.Start()
 except Exception:
     pass
