@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-startup.py - автоматична перевірка оновлень при запуску pyRevit.
-"""
+"""startup.py - автоматична перевірка оновлень при запуску pyRevit."""
 import os
 import sys
 
@@ -44,24 +42,29 @@ def _show_notice(local_ver, remote_ver):
     form.Controls.Add(lbl1)
 
     lbl2 = Label()
-    lbl2.Text      = u"Поточна версія:  {}
-Нова версія:     {}".format(
-        local_ver, remote_ver)
+    lbl2.Text      = u"Поточна версія:  {}".format(local_ver)
     lbl2.Font      = Font(u"Segoe UI", 9)
     lbl2.ForeColor = Color.FromArgb(40, 40, 40)
-    lbl2.SetBounds(16, 44, 340, 40)
+    lbl2.SetBounds(16, 44, 340, 20)
     form.Controls.Add(lbl2)
 
     lbl3 = Label()
-    lbl3.Text      = u'Натисніть кнопку "Оновлення" в панелі BIM Tools.'
-    lbl3.Font      = Font(u"Segoe UI", 8)
-    lbl3.ForeColor = Color.FromArgb(100, 100, 120)
-    lbl3.SetBounds(16, 86, 340, 18)
+    lbl3.Text      = u"Нова версія:     {}".format(remote_ver)
+    lbl3.Font      = Font(u"Segoe UI", 9, FontStyle.Bold)
+    lbl3.ForeColor = Color.FromArgb(0, 140, 0)
+    lbl3.SetBounds(16, 64, 340, 20)
     form.Controls.Add(lbl3)
+
+    lbl4 = Label()
+    lbl4.Text      = u"Натисніть кнопку "Оновлення" в панелі BIM Tools."
+    lbl4.Font      = Font(u"Segoe UI", 8)
+    lbl4.ForeColor = Color.FromArgb(100, 100, 120)
+    lbl4.SetBounds(16, 92, 340, 18)
+    form.Controls.Add(lbl4)
 
     btn = Button()
     btn.Text         = u"OK"
-    btn.SetBounds(284, 100, 72, 28)
+    btn.SetBounds(284, 108, 72, 28)
     btn.DialogResult = DialogResult.OK
     form.Controls.Add(btn)
     form.AcceptButton = btn
