@@ -137,6 +137,13 @@ def _run_notice(check_result):
     form.ShowDialog()
 
 
+class _ShowNoticeThread(object):
+    def __init__(self, result):
+        self._result = result
+    def run(self):
+        _run_notice(self._result)
+
+
 def _check_thread():
     try:
         import time
@@ -144,7 +151,8 @@ def _check_thread():
 
         result = check_for_updates()
         if result and result.get(u'has_update'):
-            sta = Thread(ThreadStart(lambda: _run_notice(result)))
+            runner = _ShowNoticeThread(result)
+            sta = Thread(ThreadStart(runner.run))
             sta.SetApartmentState(ApartmentState.STA)
             sta.Start()
             sta.Join()
