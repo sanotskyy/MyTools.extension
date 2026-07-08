@@ -9,88 +9,143 @@ if _LIB_DIR not in sys.path:
     sys.path.insert(0, _LIB_DIR)
 
 try:
-    from mytools_updater import check_for_updates
+    from mytools_updater import check_for_updates, install_update
     import clr
     clr.AddReference("System.Windows.Forms")
     clr.AddReference("System.Drawing")
     clr.AddReference("System.Threading")
     from System.Windows.Forms import (
-        Form, Label, Button, DialogResult,
-        FormBorderStyle, FormStartPosition
+        Form, Label, Button, ProgressBar, DialogResult,
+        FormBorderStyle, FormStartPosition, MessageBox,
+        MessageBoxButtons, MessageBoxIcon, Application
     )
+    import System.Windows.Forms as WinForms
     from System.Drawing import Font, FontStyle, Color
     from System.Threading import Thread, ThreadStart, ApartmentState
 except Exception:
     raise SystemExit
 
+BG     = Color.FromArgb(245, 245, 248)
+ACCENT = Color.FromArgb(0, 112, 200)
+TEXT   = Color.FromArgb(40, 40, 40)
+LIGHT  = Color.FromArgb(110, 110, 130)
+GREEN  = Color.FromArgb(0, 140, 0)
+RED    = Color.FromArgb(180, 40, 40)
 
-def _show_notice(local_ver, remote_ver):
-    form = Form()
-    form.Text            = u"MyTools — Доступне оновлення"
-    form.Width           = 380
-    form.Height          = 165
-    form.StartPosition   = FormStartPosition.CenterScreen
-    form.FormBorderStyle = FormBorderStyle.FixedDialog
-    form.MaximizeBox     = False
-    form.MinimizeBox     = False
-    form.TopMost         = True
-    form.BackColor       = Color.FromArgb(245, 245, 248)
 
-    lbl1 = Label()
-    lbl1.Text      = u"✨  Доступне оновлення MyTools!"
-    lbl1.Font      = Font(u"Segoe UI", 10, FontStyle.Bold)
-    lbl1.ForeColor = Color.FromArgb(0, 112, 200)
-    lbl1.SetBounds(16, 14, 340, 22)
-    form.Controls.Add(lbl1)
+class UpdateNotice(Form):
+    def __init__(self, check_result):
+        super(UpdateNotice, self).__init__()
+        self._result = check_result
+        local_ver  = check_result.get(u'local',  u'?')
+        remote_ver = check_result.get(u'remote', u'?')
 
-    lbl2 = Label()
-    lbl2.Text      = u"Поточна версія:  " + local_ver
-    lbl2.Font      = Font(u"Segoe UI", 9)
-    lbl2.ForeColor = Color.FromArgb(40, 40, 40)
-    lbl2.SetBounds(16, 44, 340, 20)
-    form.Controls.Add(lbl2)
+        self.Text            = u"MyTools — Доступне оновлення"
+        self.Width           = 400
+        self.Height          = 200
+        self.StartPosition   = FormStartPosition.CenterScreen
+        self.FormBorderStyle = FormBorderStyle.FixedDialog
+        self.MaximizeBox     = False
+        self.MinimizeBox     = False
+        self.TopMost         = True
+        self.BackColor       = BG
 
-    lbl3 = Label()
-    lbl3.Text      = u"Нова версія:     " + remote_ver
-    lbl3.Font      = Font(u"Segoe UI", 9, FontStyle.Bold)
-    lbl3.ForeColor = Color.FromArgb(0, 140, 0)
-    lbl3.SetBounds(16, 64, 340, 20)
-    form.Controls.Add(lbl3)
+        lbl1 = Label()
+        lbl1.Text      = u"✨  Доступне оновлення MyTools!"
+        lbl1.Font      = Font(u"Segoe UI", 10, FontStyle.Bold)
+        lbl1.ForeColor = ACCENT
+        lbl1.SetBounds(16, 14, 360, 22)
+        self.Controls.Add(lbl1)
 
-    lbl4 = Label()
-    lbl4.Text      = u"Натисніть кнопку «Оновлення» в панелі BIM Tools."
-    lbl4.Font      = Font(u"Segoe UI", 8)
-    lbl4.ForeColor = Color.FromArgb(100, 100, 120)
-    lbl4.SetBounds(16, 92, 340, 18)
-    form.Controls.Add(lbl4)
+        lbl2 = Label()
+        lbl2.Text      = u"Поточна версія:  " + local_ver
+        lbl2.Font      = Font(u"Segoe UI", 9)
+        lbl2.ForeColor = TEXT
+        lbl2.SetBounds(16, 44, 360, 20)
+        self.Controls.Add(lbl2)
 
-    btn = Button()
-    btn.Text         = u"OK"
-    btn.SetBounds(284, 108, 72, 28)
-    btn.DialogResult = DialogResult.OK
-    form.Controls.Add(btn)
-    form.AcceptButton = btn
+        lbl3 = Label()
+        lbl3.Text      = u"Нова версія:     " + remote_ver
+        lbl3.Font      = Font(u"Segoe UI", 9, FontStyle.Bold)
+        lbl3.ForeColor = GREEN
+        lbl3.SetBounds(16, 64, 360, 20)
+        self.Controls.Add(lbl3)
 
+        self._lbl_status = Label()
+        self._lbl_status.Text      = u""
+        self._lbl_status.Font      = Font(u"Segoe UI", 8)
+        self._lbl_status.ForeColor = LIGHT
+        self._lbl_status.SetBounds(16, 90, 360, 18)
+        self.Controls.Add(self._lbl_status)
+
+        self._progress = ProgressBar()
+        self._progress.SetBounds(16, 110, 360, 8)
+        self._progress.Style   = WinForms.ProgressBarStyle.Marquee
+        self._progress.Visible = False
+        self.Controls.Add(self._progress)
+
+        self._btn_install = Button()
+        self._btn_install.Text      = u"Встановити зараз"
+        self._btn_install.Font      = Font(u"Segoe UI", 9, FontStyle.Bold)
+        self._btn_install.SetBounds(16, 128, 160, 30)
+        self._btn_install.BackColor = ACCENT
+        self._btn_install.ForeColor = Color.White
+        self._btn_install.FlatStyle = WinForms.FlatStyle.Flat
+        self._btn_install.FlatAppearance.BorderSize = 0
+        self._btn_install.Click    += self._on_install
+        self.Controls.Add(self._btn_install)
+
+        btn_later = Button()
+        btn_later.Text         = u"Пізніше"
+        btn_later.Font         = Font(u"Segoe UI", 9)
+        btn_later.SetBounds(186, 128, 90, 30)
+        btn_later.FlatStyle    = WinForms.FlatStyle.Flat
+        btn_later.DialogResult = DialogResult.Cancel
+        self.Controls.Add(btn_later)
+        self.CancelButton = btn_later
+
+    def _on_install(self, sender, e):
+        self._btn_install.Enabled  = False
+        self._lbl_status.Text      = u"Встановлення…"
+        self._lbl_status.ForeColor = LIGHT
+        self._progress.Visible     = True
+        Application.DoEvents()
+
+        ok, msg = install_update(self._result)
+
+        self._progress.Visible = False
+        if ok:
+            self._lbl_status.Text      = u"✓  " + msg
+            self._lbl_status.ForeColor = GREEN
+            MessageBox.Show(
+                u"Оновлення встановлено!
+Розширення буде перезавантажено автоматично.",
+                u"Готово", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            self.Close()
+            try:
+                from pyrevit.loader import sessionmgr
+                sessionmgr.reload_pyrevit()
+            except Exception:
+                pass
+        else:
+            self._lbl_status.Text      = u"✗  " + msg
+            self._lbl_status.ForeColor = RED
+            self._btn_install.Enabled  = True
+
+
+def _run_notice(check_result):
+    form = UpdateNotice(check_result)
     form.ShowDialog()
 
 
 def _check_thread():
-    """Виконується в окремому потоці - не блокує запуск Revit."""
     try:
-        # Затримка 10 секунд - чекаємо поки Revit повністю завантажиться
         import time
         time.sleep(10)
 
         result = check_for_updates()
         if result and result.get(u'has_update'):
-            local_ver  = result.get(u'local',  u'?')
-            remote_ver = result.get(u'remote', u'?')
-
-            # Показуємо вікно через STA поток (Windows Forms вимагає STA)
-            def _show():
-                _show_notice(local_ver, remote_ver)
-
-            sta = Thread(ThreadStart(_show))
+            sta = Thread(ThreadStart(lambda: _run_notice(result)))
             sta.SetApartmentState(ApartmentState.STA)
             sta.Start()
             sta.Join()
