@@ -118,8 +118,7 @@ class UpdateNotice(Form):
             self._lbl_status.Text      = u"✓  " + msg
             self._lbl_status.ForeColor = GREEN
             MessageBox.Show(
-                u"Оновлення встановлено!
-Розширення буде перезавантажено автоматично.",
+                u"Оновлення встановлено! " + u"Розширення буде перезавантажено автоматично.",
                 u"Готово", MessageBoxButtons.OK, MessageBoxIcon.Information)
             self.Close()
             try:
