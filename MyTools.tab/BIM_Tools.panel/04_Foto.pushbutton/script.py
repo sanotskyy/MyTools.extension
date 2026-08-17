@@ -893,6 +893,15 @@ if not image_dict:
     forms.alert(u"У папці не знайдено зображень.", title=u"Фото", warn_icon=True)
     script.exit()
 
+import difflib
+
+def _suggest_key(key):
+    """Підказка найближчих за назвою файлів, коли точний ключ не знайдено."""
+    matches = difflib.get_close_matches(key, list(image_dict.keys()), n=2, cutoff=0.55)
+    if matches:
+        return u" | схожі файли в папці: {}".format(u", ".join(matches))
+    return u""
+
 
 # ════════════════════════════════════════════════════════════════════════════
 # КРОК 4: Допоміжні функції
@@ -1153,6 +1162,7 @@ def set_images_for_family(family, type_image_map, replace_existing, target_param
                 except Exception:
                     ft_name = None
             if ft_name:
+                ft_name = ft_name.strip()
                 fam_types[ft_name] = ft
             elif ft_name == u"" or ft_name is None:
                 # Unnamed type - store with empty key
@@ -1167,25 +1177,21 @@ def set_images_for_family(family, type_image_map, replace_existing, target_param
                 for type_name, image_path in type_image_map.items():
                     ft = fam_types.get(type_name)
                     if not ft:
-                        # Спроба 1: unnamed type зі словника
-                        ft = fam_types.get(u"")
-                    if not ft:
-                        # Спроба 2: CurrentType
-                        try:
-                            ft = mgr.CurrentType
-                        except Exception:
-                            ft = None
-                    if not ft:
-                        # Спроба 3: перший тип зі списку
-                        if mgr_types_list:
-                            ft = mgr_types_list[0]
-                    if not ft:
-                        avail_types = u"mgr.Types count={}, CurrentType={}, fam_types keys={}".format(
-                            len(mgr_types_list),
-                            type(mgr.CurrentType).__name__ if mgr.CurrentType else "None",
-                            list(fam_types.keys())[:5])
-                        results[type_name] = u'error: тип не знайдено. Debug: {}'.format(avail_types)
-                        continue
+                        if len(fam_types) == 1:
+                            # Сімейство має лише один тип — підміна безпечна,
+                            # бо переплутати нема з чим (напр. unnamed type).
+                            ft = list(fam_types.values())[0]
+                        else:
+                            # Багатотипне сімейство: назва типу з проєкту не
+                            # збігається з жодним типом у .rfa. РАНІШЕ тут був
+                            # fallback на CurrentType/перший тип зі списку —
+                            # це мовчки писало зображення НЕ в той тип.
+                            # Тепер — явна помилка, без вгадування.
+                            avail = u", ".join(list(fam_types.keys())[:10])
+                            results[type_name] = (
+                                u'error: тип "{}" не знайдено серед типів сімейства. '
+                                u'Доступні типи: {}'.format(type_name, avail))
+                            continue
 
                     mgr.CurrentType = ft
 
@@ -1291,7 +1297,7 @@ if param_level == 'instance_builtin':
         search_key = u"{}{}{}".format(img_prefix, type_mark, img_suffix).lower()
         image_path = image_dict.get(search_key)
         if not image_path:
-            _image_errors.append(u"[{}] файл не знайдено: ключ='{}'".format(inst.Id, search_key))
+            _image_errors.append(u"[{}] файл не знайдено: ключ='{}'{}".format(inst.Id, search_key, _suggest_key(search_key)))
             skipped_ids.append(inst.Id)
             continue
 
@@ -1309,6 +1315,8 @@ if param_level == 'instance_builtin':
             except Exception:
                 p = type_el.get_Parameter(BuiltInParameter.ALL_MODEL_TYPE_NAME)
                 type_name = p.AsString() if p else u""
+            if type_name:
+                type_name = type_name.strip()
             if not type_name:
                 _image_errors.append(u"[{}] type_name порожній".format(inst.Id))
                 skipped_ids.append(inst.Id)
@@ -1417,7 +1425,7 @@ elif param_level == 'type':
         search_key = u"{}{}{}".format(img_prefix, type_mark, img_suffix).lower()
         image_path = image_dict.get(search_key)
         if not image_path:
-            _image_errors.append(u"[{}] файл не знайдено: ключ='{}'".format(inst.Id, search_key))
+            _image_errors.append(u"[{}] файл не знайдено: ключ='{}'{}".format(inst.Id, search_key, _suggest_key(search_key)))
             skipped_ids.append(inst.Id)
             continue
 
@@ -1435,6 +1443,8 @@ elif param_level == 'type':
             except Exception:
                 p = type_el.get_Parameter(BuiltInParameter.ALL_MODEL_TYPE_NAME)
                 type_name = p.AsString() if p else u""
+            if type_name:
+                type_name = type_name.strip()
             if not type_name:
                 _image_errors.append(u"[{}] type_name порожній".format(inst.Id))
                 skipped_ids.append(inst.Id)
@@ -1552,7 +1562,7 @@ if selected_generic:
             search_key = u"{}{}{}".format(img_prefix, type_mark, img_suffix).lower()
             image_path = image_dict.get(search_key)
             if not image_path:
-                _image_errors.append(u"[{}] файл не знайдено: '{}'".format(inst.Id, search_key))
+                _image_errors.append(u"[{}] файл не знайдено: '{}'{}".format(inst.Id, search_key, _suggest_key(search_key)))
                 skipped_ids.append(inst.Id)
                 continue
 
