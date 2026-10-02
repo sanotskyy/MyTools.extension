@@ -18,7 +18,7 @@ from System.Windows.Forms import (
     Form, Label, ComboBox, Button, Panel, TextBox, RadioButton,
     ListBox, GroupBox, DialogResult, FormBorderStyle, FormStartPosition,
     ComboBoxStyle, SelectionMode, DragDropEffects, MessageBox,
-    MessageBoxButtons, MessageBoxIcon,
+    MessageBoxButtons, MessageBoxIcon, CheckBox,
 )
 from System.Drawing import Point, Size, Color, Font, FontStyle
 from System.Collections.Generic import List
@@ -260,8 +260,21 @@ class SheetNumberForm(Form):
         self.sheet_list.MouseMove     += self._on_list_mousemove
         self.sheet_list.DragOver      += self._on_list_dragover
         self.sheet_list.DragDrop      += self._on_list_dragdrop
+        self.sheet_list.SelectedIndexChanged += self._update_preview
         self.Controls.Add(self.sheet_list)
-        y += 198; self.Controls.Add(sep(y)); y += 12
+        y += 198
+
+        self.chk_from_selected = CheckBox()
+        self.chk_from_selected.Text      = u"Нумерувати тільки від вибраного листа вниз (листи вище — без змін)"
+        self.chk_from_selected.Font      = Font(u"Segoe UI", 9)
+        self.chk_from_selected.ForeColor = Color.FromArgb(40, 40, 40)
+        self.chk_from_selected.BackColor = BG
+        self.chk_from_selected.SetBounds(PAD, y, 500, 20)
+        self.chk_from_selected.CheckedChanged += self._update_preview
+        self.Controls.Add(self.chk_from_selected)
+        y += 24
+
+        self.Controls.Add(sep(y)); y += 12
 
         # ── 4. Формат номера ─────────────────────────────────────────────
         self.Controls.Add(lbl(u"4.  Формат номера:", PAD, y, bold=True))
@@ -307,7 +320,7 @@ class SheetNumberForm(Form):
         btn_ok.ForeColor = Color.White
         btn_ok.FlatStyle = WinForms.FlatStyle.Flat
         btn_ok.FlatAppearance.BorderSize = 0
-        btn_ok.DialogResult = DialogResult.OK
+        btn_ok.Click += self._on_ok_click
         self.Controls.Add(btn_ok)
 
         btn_cancel = Button()
@@ -325,6 +338,16 @@ class SheetNumberForm(Form):
         # Початкове заповнення
         self._refresh_sheets()
         self._update_preview(None, None)
+
+    # ── Кнопка «Пронумерувати» ──────────────────────────────────────────
+    def _on_ok_click(self, sender, e):
+        if self.chk_from_selected.Checked and self.sheet_list.SelectedIndex < 0:
+            MessageBox.Show(
+                u"Виберіть лист у списку (пункт 3), з якого почати нумерацію вниз.",
+                u"Листи", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            return
+        self.DialogResult = DialogResult.OK
+        self.Close()
 
     # ── Логіка вибору джерела ────────────────────────────────────────────
     def _on_source_changed(self, sender, e):
@@ -417,13 +440,27 @@ class SheetNumberForm(Form):
 
     def _update_preview(self, sender, e):
         preview = self._format_number(0)
-        self.lbl_preview.Text = u"Прев'ю: {}".format(preview)
+        if self.chk_from_selected.Checked:
+            idx = self.sheet_list.SelectedIndex
+            if idx >= 0:
+                self.lbl_preview.Text = u"Прев'ю: лист #{} отримає {}".format(idx + 1, preview)
+            else:
+                self.lbl_preview.Text = u"Прев'ю: {}  (спочатку виберіть лист у списку)".format(preview)
+        else:
+            self.lbl_preview.Text = u"Прев'ю: {}".format(preview)
 
     def get_sheets(self):
         return self._sheets
 
     def get_number(self, index):
         return self._format_number(index)
+
+    def get_start_index(self):
+        """0, якщо нумеруємо весь список; інакше — індекс вибраного
+        листа, з якого (включно) починається нумерація вниз по списку."""
+        if self.chk_from_selected.Checked and self.sheet_list.SelectedIndex >= 0:
+            return self.sheet_list.SelectedIndex
+        return 0
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -437,6 +474,7 @@ if sheet_form.ShowDialog() != DialogResult.OK:
     script.exit()
 
 sheets_to_number = sheet_form.get_sheets()
+start_idx        = sheet_form.get_start_index()
 
 if not sheets_to_number:
     forms.alert(u"Не знайдено листів для нумерації.", title=u"Листи", warn_icon=True)
@@ -447,13 +485,33 @@ if not sheets_to_number:
 # КРОК 4: Перенумерація
 # ════════════════════════════════════════════════════════════════════════════
 success_count = 0
+skipped_count = 0
 error_list    = []
+
+# Листи вище start_idx (якщо нумеруємо "від вибраного вниз") лишаються
+# без змін — рахуємо лише як пропущені для звіту.
+to_rename = []
+for i, sheet in enumerate(sheets_to_number):
+    if i < start_idx:
+        skipped_count += 1
+        continue
+    new_number = sheet_form.get_number(i - start_idx)
+    to_rename.append((sheet, new_number))
 
 with Transaction(doc, u"Перенумерація листів") as tx:
     tx.Start()
 
-    for i, sheet in enumerate(sheets_to_number):
-        new_number = sheet_form.get_number(i)
+    # Прохід 1: тимчасові унікальні номери. Без цього прямий перезапис
+    # може впасти з помилкою "Sheet number is already in use", якщо
+    # цільовий номер листа ще належить іншому листу з того ж списку.
+    for idx, (sheet, _new_number) in enumerate(to_rename):
+        try:
+            sheet.SheetNumber = u"__TMP__{}__".format(idx)
+        except Exception:
+            pass
+
+    # Прохід 2: фінальні номери.
+    for sheet, new_number in to_rename:
         try:
             sheet.SheetNumber = new_number
             success_count += 1
@@ -469,6 +527,8 @@ with Transaction(doc, u"Перенумерація листів") as tx:
 # ════════════════════════════════════════════════════════════════════════════
 report = []
 report.append(u"✅ Успішно пронумеровано: {}".format(success_count))
+if start_idx > 0:
+    report.append(u"⏭ Пропущено вище вибраного листа (без змін): {}".format(skipped_count))
 if error_list:
     report.append(u"❌ Помилки ({}):\n{}".format(
         len(error_list), u"\n".join(error_list[:10])))
